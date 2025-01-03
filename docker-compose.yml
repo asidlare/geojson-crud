@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgis/postgis:16-3.5
+    container_name: geojson-crud-db
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+    env_file:
+      - ./env_file.txt
+  backend:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: geojson-crud-backend
+    command: gunicorn app.main:my_app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8001 --reload
+    volumes:
+      - .:/code
+    ports:
+      - "8001:8001"
+    env_file:
+      - ./env_file.txt
+    depends_on:
+      - db

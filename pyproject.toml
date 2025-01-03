@@ -1,0 +1,72 @@
+[tool.poetry]
+name = "Geojson CRUD app"
+version = "0.1.0"
+description = ""
+authors = ["Anna Sidlarewicz <asidlare@gmail.com>"]
+
+[tool.poetry.plugins."poetry.application.plugin"]
+export = "poetry_plugin_export.plugins:ExportApplicationPlugin"
+
+[tool.poetry.dependencies]
+python = "3.12.7"
+more-itertools = "10.5.0"
+sqlalchemy = {extras = ["asyncio"], version = "2.0.36"}
+uvicorn = {extras = ["standard"], version = "0.32.0"}
+gunicorn = "23.0.0"
+fastapi = {extras = ["all"], version = "0.115.5"}
+pydantic = {extras = ["email"], version = "2.9.2"}
+asyncpg = "0.30.0"
+alembic = "1.14.0"
+geoalchemy2 = "0.16.0"
+geojson-pydantic = "1.2.0"
+python-multipart = "0.0.20"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "*"
+# test
+pytest = "8.3.3"
+pytest-asyncio = "0.24.0"
+coverage = "7.6.7"
+pytest-cov = "6.0.0"
+pytest-mimesis = "1.1.0"
+pytest-mock = "3.14.0"
+pytest-postgresql = "6.1.1"
+psycopg = {extras = ["binary"], version = "3.2.3"}
+httpx = "0.27.2"
+
+[build-system]
+requires = ["poetry-core==1.8.4"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = "tests"
+python_files = "test_*.py"
+python_functions = "test_*"
+python_classes = "Test* *Tests"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_mode = "auto"
+pythonpath = ["."]
+addopts = [
+  "--strict-markers",
+  "--strict-config",
+  "-ra"
+]
+
+[tool.mypy]
+check_untyped_defs = true
+namespace_packages = true
+plugins = "sqlalchemy.ext.mypy.plugin"
+pretty = true
+show_error_context = true
+exclude = ".venv"
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+  "backoff.*",
+  "opentracing.*",
+]
+ignore_missing_imports = true
