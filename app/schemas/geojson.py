@@ -4,14 +4,21 @@ from pydantic import BaseModel, ConfigDict, EmailStr, field_validator, Json
 from typing import Optional, Any
 
 
-class ProjectCreate(BaseModel):
+class ProjectCreateSchema(BaseModel):
     name: str
     description: Optional[str] = None
     geo_project_type: str
     bbox: Optional[list[float]] = None
 
 
-class ProjectResponse(BaseModel):
+class ProjectUpdateSchema(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    geo_project_type: Optional[str] = None
+    bbox: Optional[list[float]] = None
+
+
+class ProjectResponseSchema(BaseModel):
     project_id: int
     name: str
     description: Optional[str] = None

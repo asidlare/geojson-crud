@@ -8,13 +8,20 @@ from app.api.geojson import (
     create_project_entry,
     get_geo_data_from_feature,
     get_geo_data_from_feature_collection,
+    project_by_id_exists,
     project_by_name_exists,
     read_project_entries,
     read_project_entry,
+    update_project_entry,
+    delete_project_entry
 )
 from app.services.database import get_db_session, get_db_engine
 from app.schemas.error import ErrorResponse
-from app.schemas.geojson import ProjectCreate, ProjectResponse
+from app.schemas.geojson import (
+    ProjectCreateSchema,
+    ProjectUpdateSchema,
+    ProjectResponseSchema
+)
 
 
 geojson_router = APIRouter()
@@ -54,18 +61,18 @@ async def create(
             status_code=status.HTTP_400_BAD_REQUEST
         )
 
-    project_model = ProjectCreate(
+    project_model = ProjectCreateSchema(
         name=name,
         description=description,
         geo_project_type=json_data.get("type"),
         bbox=json_data.get("bbox"),
     ).model_dump(exclude_unset=True, exclude_none=True)
-    await create_project_entry(db_engine, project_model, geo_data)
+    project_id = await create_project_entry(db_engine, project_model, geo_data)
 
-    return JSONResponse(
-        content={"message": f"Successfully uploaded {file.filename}"},
-        status_code=status.HTTP_201_CREATED,
-    )
+    project = await read_project_entry(db_engine, project_id)
+    project = ProjectResponseSchema(**project).model_dump(exclude_none=True)
+    return project
+
 
 @geojson_router.get(
     "/read/{project_id}",
@@ -75,8 +82,14 @@ async def read(
     project_id: int,
     db_engine: Annotated[AsyncEngine, Depends(get_db_engine)],
 ):
+    if not await project_by_id_exists(db_engine, project_id):
+        return JSONResponse(
+            content={"message": f"Project id: {project_id} does not exist."},
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
     project = await read_project_entry(db_engine, project_id)
-    project = ProjectResponse(**project).model_dump(exclude_none=True)
+    project = ProjectResponseSchema(**project).model_dump(exclude_none=True)
     return project
 
 
@@ -89,7 +102,7 @@ async def list(
 ):
     projects = await read_project_entries(db_engine)
     response_projects = [
-        ProjectResponse(**project._asdict()).model_dump(exclude_none=True)
+        ProjectResponseSchema(**project._asdict()).model_dump(exclude_none=True)
         for project in projects
     ]
     return response_projects
@@ -106,7 +119,51 @@ async def update(
     name: Optional[str] = None,
     description: Optional[str] = None
 ):
-    pass
+    if not await project_by_id_exists(db_engine, project_id):
+        return JSONResponse(
+            content={"message": f"Project id: {project_id} does not exist."},
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    json_data = {}
+    geo_data = {}
+
+    if file:
+        try:
+            json_data = json.loads(bytearray(file.file.read()))
+        except Exception:
+            return JSONResponse(
+                content={"message": f"Bad file format: {file.filename}."},
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        if json_data["type"] == "Feature":
+            geo_data = get_geo_data_from_feature(json_data)
+        elif json_data["type"] == "FeatureCollection":
+            geo_data = get_geo_data_from_feature_collection(json_data)
+        else:
+            return JSONResponse(
+                content={"message": f"Bad file format: {file.filename}."},
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+    if not (name or description or geo_data):
+        return JSONResponse(
+            content={"message": "Bad request: name or description or file has to be defined."},
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    project_model = ProjectUpdateSchema(
+        name=name,
+        description=description,
+        geo_project_type=json_data.get("type"),
+        bbox=json_data.get("bbox"),
+    ).model_dump(exclude_unset=True, exclude_none=True)
+    await update_project_entry(db_engine, project_id, project_model, geo_data)
+
+    project = await read_project_entry(db_engine, project_id)
+    project = ProjectResponseSchema(**project).model_dump(exclude_none=True)
+    return project
 
 
 @geojson_router.delete(
@@ -117,5 +174,4 @@ async def delete(
     db_session: Annotated[AsyncSession, Depends(get_db_session)],
     project_id: int
 ):
-    pass
-    # await delete_user(db_session, user_id)
+    await delete_project_entry(db_session, project_id)

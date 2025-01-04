@@ -76,7 +76,7 @@ def fetch_projects_stmt(project_id: Optional[int] = None):
         '''
     select_stmt += '''
         ),
-        cte_features AS (
+        cte_feat_json AS (
             SELECT 
                 p.project_id AS project_id,
                 p.name AS name,
@@ -107,6 +107,7 @@ def fetch_projects_stmt(project_id: Optional[int] = None):
             JOIN cte_feat f 
                 ON (p.project_id = f.project_id)
             GROUP BY 1, 2, 3, 4, 5, 6, 7
+            ORDER BY project_id
         )
         SELECT
             project_id,
@@ -126,8 +127,7 @@ def fetch_projects_stmt(project_id: Optional[int] = None):
                 )
             ELSE NULL
             END as featurecollection
-        FROM cte_geometry
-        ORDER BY project_id
+        FROM cte_feat_json
     '''
     return select_stmt
 
@@ -167,15 +167,36 @@ async def create_project_entry(
             geo_project_type=project_data["geo_project_type"],
             geo_data=geo_data,
         )
-
         await trans.execute(
             text(feat_db_vars['feature_sql']),
             feat_db_vars['geo_data_values']
         )
 
+        return project_id
 
-async def update_project_entry():
-    pass
+
+async def update_project_entry(
+    db_engine: AsyncEngine,
+    project_id: int,
+    project_data: dict[str, Any],
+    geo_data: Optional[dict[str, Any]] = None,
+):
+    async with db_engine.begin() as trans:
+        project = update(Project).where(Project.project_id == project_id).values(**project_data)
+        await trans.execute(project)
+
+        if geo_data:
+            feat_delete_stmt = delete(Feature).where(Feature.project_id == project_id)
+            await trans.execute(feat_delete_stmt)
+            feat_db_vars = get_features_sql_and_data(
+                project_id=project_id,
+                geo_project_type=project_data["geo_project_type"],
+                geo_data=geo_data,
+            )
+            await trans.execute(
+                text(feat_db_vars['feature_sql']),
+                feat_db_vars['geo_data_values']
+            )
 
 
 async def read_project_entry(
@@ -199,7 +220,7 @@ async def read_project_entries(
         return res
 
 
-async def delete_project(db_session: AsyncSession, project_id: int) -> None:
+async def delete_project_entry(db_session: AsyncSession, project_id: int) -> None:
     async with db_session.begin():
         query = delete(Project).where(Project.project_id == project_id)
         await db_session.execute(query)

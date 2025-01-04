@@ -40,5 +40,11 @@ class Feature(Base):
     feature_id: Mapped[int] = mapped_column(BIGINT, primary_key=True)
     geometry: Mapped[WKBElement] = mapped_column(Geometry(spatial_index=False), nullable=False)
     properties: Mapped[Optional[JSON]] = mapped_column(JSON, nullable=True)
-    project_id: Mapped[int] = mapped_column(ForeignKey("projects.project_id", ondelete="CASCADE"))
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "projects.project_id",
+            ondelete="CASCADE"
+        ),
+        index=True,
+    )
     project: Mapped[Project] = relationship("Project", back_populates="features")
