@@ -67,7 +67,7 @@ def fetch_projects_stmt(project_id: Optional[int] = None):
                 'Feature' AS type,
                 properties::json AS properties,
                 ST_AsGeoJSON(geometry)::json AS geometry,
-                project_id as project_id
+                project_id AS project_id
             FROM features
     '''
     if project_id:
@@ -102,7 +102,7 @@ def fetch_projects_stmt(project_id: Optional[int] = None):
                             'geometry', f.geometry
                         )
                     )
-                END as features
+                END AS features
             FROM projects p 
             JOIN cte_feat f 
                 ON (p.project_id = f.project_id)
@@ -118,7 +118,7 @@ def fetch_projects_stmt(project_id: Optional[int] = None):
             CASE WHEN geo_project_type = 'Feature' THEN
                 features->0
             ELSE NULL
-            END as feature,
+            END AS feature,
             CASE WHEN geo_project_type = 'FeatureCollection' THEN
                 JSON_BUILD_OBJECT(
                     'type', geo_project_type,
@@ -126,7 +126,7 @@ def fetch_projects_stmt(project_id: Optional[int] = None):
                     'features', features
                 )
             ELSE NULL
-            END as featurecollection
+            END AS featurecollection
         FROM cte_feat_json
     '''
     return select_stmt

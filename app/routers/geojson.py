@@ -18,7 +18,9 @@ from app.api.geojson import (
 from app.services.database import get_db_session, get_db_engine
 from app.schemas.error import ErrorResponse
 from app.schemas.geojson import (
+    ProjectBaseCreateSchema,
     ProjectCreateSchema,
+    ProjectBaseUpdateSchema,
     ProjectUpdateSchema,
     ProjectResponseSchema
 )
@@ -32,19 +34,21 @@ geojson_router = APIRouter()
     status_code=status.HTTP_201_CREATED
 )
 async def create(
-    name: str,
     db_engine: Annotated[AsyncEngine, Depends(get_db_engine)],
-    description: Optional[str] = None,
+    project: ProjectBaseCreateSchema = Depends(),
     file: UploadFile = File(...),
 ):
-    if await project_by_name_exists(db_engine, name):
+    project_data = project.model_dump()
+
+    if await project_by_name_exists(db_engine, project_data["name"]):
         return JSONResponse(
             content={"message": f"Project name: {name} exists."},
             status_code=status.HTTP_400_BAD_REQUEST
         )
 
     try:
-        json_data = json.loads(bytearray(file.file.read()))
+        file_content = await file.read()
+        json_data = json.loads(bytearray(file_content))
     except Exception:
         return JSONResponse(
             content={"message": f"Bad file format: {file.filename}."},
@@ -62,8 +66,8 @@ async def create(
         )
 
     project_model = ProjectCreateSchema(
-        name=name,
-        description=description,
+        name=project_data["name"],
+        description=project_data["description"],
         geo_project_type=json_data.get("type"),
         bbox=json_data.get("bbox"),
     ).model_dump(exclude_unset=True, exclude_none=True)
@@ -85,7 +89,7 @@ async def read(
     if not await project_by_id_exists(db_engine, project_id):
         return JSONResponse(
             content={"message": f"Project id: {project_id} does not exist."},
-            status_code=status.HTTP_400_BAD_REQUEST
+            status_code=status.HTTP_404_NOT_FOUND
         )
 
     project = await read_project_entry(db_engine, project_id)
@@ -115,22 +119,30 @@ async def list(
 async def update(
     project_id: int,
     db_engine: Annotated[AsyncEngine, Depends(get_db_engine)],
+    project: ProjectBaseUpdateSchema = Depends(),
     file: Union[UploadFile, str, None] = File(None),
-    name: Optional[str] = None,
-    description: Optional[str] = None
 ):
+    project_data = project.model_dump()
+
     if not await project_by_id_exists(db_engine, project_id):
         return JSONResponse(
             content={"message": f"Project id: {project_id} does not exist."},
-            status_code=status.HTTP_400_BAD_REQUEST
+            status_code=status.HTTP_404_NOT_FOUND
         )
+    if project_data["name"]:
+        if await project_by_name_exists(db_engine, project_data["name"]):
+            return JSONResponse(
+                content={"message": f"Project name: {name} exists."},
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
 
     json_data = {}
     geo_data = {}
 
     if file:
         try:
-            json_data = json.loads(bytearray(file.file.read()))
+            file_content = await file.read()
+            json_data = json.loads(bytearray(file_content))
         except Exception:
             return JSONResponse(
                 content={"message": f"Bad file format: {file.filename}."},
@@ -147,15 +159,15 @@ async def update(
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
-    if not (name or description or geo_data):
+    if not (project_data["name"] or project_data["description"] or geo_data):
         return JSONResponse(
             content={"message": "Bad request: name or description or file has to be defined."},
             status_code=status.HTTP_400_BAD_REQUEST
         )
 
     project_model = ProjectUpdateSchema(
-        name=name,
-        description=description,
+        name=project_data["name"],
+        description=project_data["description"],
         geo_project_type=json_data.get("type"),
         bbox=json_data.get("bbox"),
     ).model_dump(exclude_unset=True, exclude_none=True)

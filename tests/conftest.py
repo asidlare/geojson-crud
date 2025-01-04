@@ -1,9 +1,12 @@
+import json
 import pytest
 from contextlib import ExitStack
 from fastapi.testclient import TestClient
+from io import BytesIO
 from pytest_asyncio import is_async_test
 from pytest_postgresql import factories
 from pytest_postgresql.janitor import DatabaseJanitor
+from sqlalchemy.sql import text
 
 from app.main import init_app
 from app.services.database import (
@@ -67,6 +70,7 @@ async def connection_test(test_db):
 async def create_tables(connection_test):
     async with databasemanager.connect() as connection:
         await databasemanager.drop_all(connection)
+        await connection.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"));
         await databasemanager.create_all(connection)
 
 
@@ -86,3 +90,62 @@ async def engine_override(app, connection_test):
             yield engine
 
     app.dependency_overrides[get_db_engine] = get_db_engine_override
+
+
+@pytest.fixture(scope="function")
+def point_feature_dict():
+    return {
+        "type": "Feature",
+        "bbox": [0.0, 0.0, 0.0, 0.0],
+        "properties": {
+            "name": "zażółć gęślą jaźń"
+        },
+        "geometry": {
+            "type": "Point",
+            "coordinates": [0, 0],
+        }
+    }
+
+
+@pytest.fixture(scope="function")
+def point_feature_file(point_feature_dict):
+    file = BytesIO(json.dumps(point_feature_dict).encode())
+    file.name = "point.json"
+    return file
+
+
+
+@pytest.fixture(scope="function")
+def polygon_feature_dict():
+    return {
+        "type": "Feature",
+        "properties": {
+            "name": "zażółć gęślą jaźń"
+        },
+        "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+                [
+                    [0, 0],
+                    [1, 0],
+                    [1, 1],
+                    [0, 1],
+                    [0, 0]
+                ]
+            ]
+        }
+    }
+
+
+@pytest.fixture(scope="function")
+def polygon_feature_file(polygon_feature_dict):
+    file = BytesIO(json.dumps(polygon_feature_dict).encode())
+    file.name = "polygon.json"
+    return file
+
+
+@pytest.fixture(scope="function")
+def empty_string_file():
+    file = BytesIO(''.encode())
+    file.name = "empty_string.json"
+    return file
