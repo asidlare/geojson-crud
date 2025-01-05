@@ -1,35 +1,42 @@
+from pydantic import ValidationError
 from sqlalchemy import select, update, delete
 from sqlalchemy.dialects.postgresql import insert, dialect
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.sql import text
 from typing import Optional, Any
-import geojson_pydantic as gp
+from geojson_pydantic import Feature, FeatureCollection
 import json
 
-from app.models import Project, Feature
+from app.models import Project as ProjectModel, Feature as FeatureModel
 
 
-def get_geo_data_from_feature(json_data: dict[str, Any]):
-    return gp.Feature(
-        type=json_data.get("type"),
-        geometry=json_data.get("geometry"),
-        properties=json_data.get("properties"),
-        bbox=json_data.get("bbox"),
-    ).model_dump()
+def get_geo_data_from_feature(json_data: Feature):
+    try:
+        return Feature(
+            type=json_data.get("type"),
+            geometry=json_data.get("geometry"),
+            properties=json_data.get("properties"),
+            bbox=json_data.get("bbox"),
+        ).model_dump()
+    except ValidationError as e:
+        raise e
 
 
-def get_geo_data_from_feature_collection(json_data: dict[str, Any]):
-    return gp.FeatureCollection(
+
+def get_geo_data_from_feature_collection(json_data: FeatureCollection):
+    if not isinstance(json_data.get("features"), list):
+        json_data["features"] = []
+    return FeatureCollection(
         type=json_data.get("type"),
         features=[
-            gp.Feature(
+            Feature(
                 type=feature.get("type"),
                 geometry=feature.get("geometry"),
                 properties=feature.get("properties"),
                 bbox=feature.get("bbox"),
             )
             for feature in json_data.get("features")
-        ],
+        ] or None,
     ).model_dump()
 
 
@@ -137,9 +144,9 @@ async def project_by_name_exists(
     name: str,
 ) -> bool:
     async with db_engine.connect() as conn:
-        query = select(Project).where(Project.name == name)
+        query = select(ProjectModel).where(ProjectModel.name == name)
         result = await conn.execute(query)
-        return bool(result.scalar())
+        return bool(result.fetchone())
 
 
 async def project_by_id_exists(
@@ -147,9 +154,9 @@ async def project_by_id_exists(
     project_id: int,
 ) -> bool:
     async with db_engine.connect() as conn:
-        query = select(Project).where(Project.project_id == project_id)
+        query = select(ProjectModel).where(ProjectModel.project_id == project_id)
         result = await conn.execute(query)
-        return bool(result.scalar())
+        return bool(result.fetchone())
 
 
 async def create_project_entry(
@@ -158,7 +165,7 @@ async def create_project_entry(
     geo_data: dict[str, Any],
 ):
     async with db_engine.begin() as trans:
-        project = insert(Project).values(**project_data).returning(Project.project_id)
+        project = insert(ProjectModel).values(**project_data).returning(ProjectModel.project_id)
         result = await trans.execute(project)
         project_id = result.fetchone()[0]
 
@@ -182,21 +189,23 @@ async def update_project_entry(
     geo_data: Optional[dict[str, Any]] = None,
 ):
     async with db_engine.begin() as trans:
-        project = update(Project).where(Project.project_id == project_id).values(**project_data)
+        project = update(ProjectModel).where(ProjectModel.project_id == project_id).values(**project_data)
         await trans.execute(project)
 
-        if geo_data:
-            feat_delete_stmt = delete(Feature).where(Feature.project_id == project_id)
-            await trans.execute(feat_delete_stmt)
-            feat_db_vars = get_features_sql_and_data(
-                project_id=project_id,
-                geo_project_type=project_data["geo_project_type"],
-                geo_data=geo_data,
-            )
-            await trans.execute(
-                text(feat_db_vars['feature_sql']),
-                feat_db_vars['geo_data_values']
-            )
+        if not geo_data:
+            return
+
+        feat_delete_stmt = delete(FeatureModel).where(FeatureModel.project_id == project_id)
+        await trans.execute(feat_delete_stmt)
+        feat_db_vars = get_features_sql_and_data(
+            project_id=project_id,
+            geo_project_type=project_data["geo_project_type"],
+            geo_data=geo_data,
+        )
+        await trans.execute(
+            text(feat_db_vars['feature_sql']),
+            feat_db_vars['geo_data_values']
+        )
 
 
 async def read_project_entry(
@@ -206,8 +215,7 @@ async def read_project_entry(
     async with db_engine.connect() as conn:
         select_stmt = fetch_projects_stmt(project_id)
         result = await conn.execute(text(select_stmt), {'project_id': project_id})
-        res = result.fetchone()
-        return res._asdict()
+        return result.fetchone()._asdict()
 
 
 async def read_project_entries(
@@ -216,11 +224,10 @@ async def read_project_entries(
     async with db_engine.connect() as conn:
         select_stmt = fetch_projects_stmt()
         result = await conn.execute(text(select_stmt))
-        res = result.fetchall()
-        return res
+        return result.fetchall()
 
 
 async def delete_project_entry(db_session: AsyncSession, project_id: int) -> None:
     async with db_session.begin():
-        query = delete(Project).where(Project.project_id == project_id)
+        query = delete(ProjectModel).where(ProjectModel.project_id == project_id)
         await db_session.execute(query)

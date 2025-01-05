@@ -2,7 +2,9 @@ import json
 
 from fastapi import APIRouter, Depends, File, UploadFile, status
 from fastapi.responses import JSONResponse
+from geojson_pydantic import Feature, FeatureCollection
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine
+from pydantic import ValidationError
 from typing import Annotated, Optional, Union
 from app.api.geojson import (
     create_project_entry,
@@ -16,7 +18,6 @@ from app.api.geojson import (
     delete_project_entry
 )
 from app.services.database import get_db_session, get_db_engine
-from app.schemas.error import ErrorResponse
 from app.schemas.geojson import (
     ProjectBaseCreateSchema,
     ProjectCreateSchema,
@@ -42,23 +43,35 @@ async def create(
 
     if await project_by_name_exists(db_engine, project_data["name"]):
         return JSONResponse(
-            content={"message": f"Project name: {name} exists."},
+            content={"message": f"Project name: {project_data['name']} exists."},
             status_code=status.HTTP_400_BAD_REQUEST
         )
 
     try:
         file_content = await file.read()
         json_data = json.loads(bytearray(file_content))
-    except Exception:
+    except json.JSONDecodeError:
         return JSONResponse(
             content={"message": f"Bad file format: {file.filename}."},
             status_code=status.HTTP_400_BAD_REQUEST
         )
 
-    if json_data["type"] == "Feature":
-        geo_data = get_geo_data_from_feature(json_data)
-    elif json_data["type"] == "FeatureCollection":
-        geo_data = get_geo_data_from_feature_collection(json_data)
+    if json_data.get("type", "Not Found") == "Feature":
+        try:
+            geo_data = get_geo_data_from_feature(json_data)
+        except ValidationError:
+            return JSONResponse(
+                content={"message": f"Bad file format: {file.filename}."},
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY
+            )
+    elif json_data.get("type", "Not Found") == "FeatureCollection":
+        try:
+            geo_data = get_geo_data_from_feature_collection(json_data)
+        except ValidationError:
+            return JSONResponse(
+                content={"message": f"Bad file format: {file.filename}."},
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY
+            )
     else:
         return JSONResponse(
             content={"message": f"Bad file format: {file.filename}."},
@@ -67,7 +80,7 @@ async def create(
 
     project_model = ProjectCreateSchema(
         name=project_data["name"],
-        description=project_data["description"],
+        description=project_data.get("description"),
         geo_project_type=json_data.get("type"),
         bbox=json_data.get("bbox"),
     ).model_dump(exclude_unset=True, exclude_none=True)
@@ -129,10 +142,10 @@ async def update(
             content={"message": f"Project id: {project_id} does not exist."},
             status_code=status.HTTP_404_NOT_FOUND
         )
-    if project_data["name"]:
+    if project_data.get("name"):
         if await project_by_name_exists(db_engine, project_data["name"]):
             return JSONResponse(
-                content={"message": f"Project name: {name} exists."},
+                content={"message": f"Project name: {project_data['name']} exists."},
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
@@ -143,31 +156,44 @@ async def update(
         try:
             file_content = await file.read()
             json_data = json.loads(bytearray(file_content))
-        except Exception:
+        except json.JSONDecodeError:
             return JSONResponse(
                 content={"message": f"Bad file format: {file.filename}."},
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
-        if json_data["type"] == "Feature":
-            geo_data = get_geo_data_from_feature(json_data)
-        elif json_data["type"] == "FeatureCollection":
-            geo_data = get_geo_data_from_feature_collection(json_data)
+        if json_data.get("type", "Not Found") == "Feature":
+            try:
+                geo_data = get_geo_data_from_feature(json_data)
+            except ValidationError:
+                return JSONResponse(
+                    content={"message": f"Bad file format: {file.filename}."},
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY
+                )
+
+        elif json_data.get("type", "Not Found") == "FeatureCollection":
+            try:
+                geo_data = get_geo_data_from_feature_collection(json_data)
+            except ValidationError:
+                return JSONResponse(
+                    content={"message": f"Bad file format: {file.filename}."},
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY
+                )
         else:
             return JSONResponse(
                 content={"message": f"Bad file format: {file.filename}."},
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
-    if not (project_data["name"] or project_data["description"] or geo_data):
+    if not (project_data.get("name") or project_data.get("description") or geo_data):
         return JSONResponse(
             content={"message": "Bad request: name or description or file has to be defined."},
             status_code=status.HTTP_400_BAD_REQUEST
         )
 
     project_model = ProjectUpdateSchema(
-        name=project_data["name"],
-        description=project_data["description"],
+        name=project_data.get("name"),
+        description=project_data.get("description"),
         geo_project_type=json_data.get("type"),
         bbox=json_data.get("bbox"),
     ).model_dump(exclude_unset=True, exclude_none=True)

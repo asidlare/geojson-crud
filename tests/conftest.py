@@ -145,7 +145,109 @@ def polygon_feature_file(polygon_feature_dict):
 
 
 @pytest.fixture(scope="function")
+def feature_collection_dict():
+    return {
+        "type": "FeatureCollection",
+        "features": [{
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [102.0, 0.5]
+            },
+            "properties": {
+                "prop0": "value0"
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [102.0, 0.0],
+                    [103.0, 1.0],
+                    [104.0, 0.0],
+                    [105.0, 1.0]
+                ]
+            },
+            "properties": {
+                "prop0": "value0",
+                "prop1": 0.0
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [100.0, 0.0],
+                        [101.0, 0.0],
+                        [101.0, 1.0],
+                        [100.0, 1.0],
+                        [100.0, 0.0]
+                    ]
+                ]
+            },
+            "properties": {
+                "prop0": "value0",
+                "prop1": {
+                    "this": "that"
+                }
+            }
+        }
+    ]}
+
+
+@pytest.fixture(scope="function")
+def feature_collection_file(feature_collection_dict):
+    file = BytesIO(json.dumps(feature_collection_dict).encode())
+    file.name = "featurecollection.json"
+    return file
+
+
+@pytest.fixture(scope="function")
 def empty_string_file():
     file = BytesIO(''.encode())
     file.name = "empty_string.json"
+    return file
+
+
+@pytest.fixture(scope="function")
+def no_feature_geometry_only_file():
+    json_dict = {
+        "geometry": {
+            "type": "Point",
+            "coordinates": [0, 0],
+        }
+    }
+    file = BytesIO(json.dumps(json_dict).encode())
+    file.name = "no_feature_geometry_only.json"
+    return file
+
+
+@pytest.fixture(scope="function")
+def broken_geometry_file():
+    json_dict = {
+        "type": "Feature",
+        "geometry": {
+            "type": "LineString",
+            "coordinates": [0, 0],
+        }
+    }
+    file = BytesIO(json.dumps(json_dict).encode())
+    file.name = "broken_geometry.json"
+    return file
+
+
+@pytest.fixture(scope="function")
+def broken_features_file():
+    json_dict = {
+        "type": "FeatureCollection",
+        "features": {
+            "type": "LineString",
+            "coordinates": [0, 0],
+        }
+    }
+    file = BytesIO(json.dumps(json_dict).encode())
+    file.name = "broken_features.json"
     return file

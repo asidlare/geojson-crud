@@ -29,10 +29,6 @@ class Project(Base, TimestampMixin):
         cascade="all, delete",
     )
 
-    def __repr__(self) -> str:
-        return (f"Project(name={self.name}, type={self.project_type}, "
-                f"description={self.description})")
-
 
 class Feature(Base):
     __tablename__ = "features"
