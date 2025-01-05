@@ -1,17 +1,17 @@
 import json
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from fastapi.responses import JSONResponse
 from geojson_pydantic import Feature, FeatureCollection
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine
 from pydantic import ValidationError
-from typing import Annotated, Optional, Union
+from typing import Annotated, Union
 from app.api.geojson import (
     create_project_entry,
+    fetch_project_by_id,
     get_geo_data_from_feature,
     get_geo_data_from_feature_collection,
-    project_by_id_exists,
-    project_by_name_exists,
+    project_by_unique_index_exists,
     read_project_entries,
     read_project_entry,
     update_project_entry,
@@ -36,12 +36,13 @@ geojson_router = APIRouter()
 )
 async def create(
     db_engine: Annotated[AsyncEngine, Depends(get_db_engine)],
-    project: ProjectBaseCreateSchema = Depends(),
+    project: Annotated[ProjectBaseCreateSchema, Query()],
     file: UploadFile = File(...),
 ):
-    project_data = project.model_dump()
 
-    if await project_by_name_exists(db_engine, project_data["name"]):
+    project_data = project.model_dump(exclude_none=True, exclude_unset=True)
+
+    if await project_by_unique_index_exists(db_engine, project_data):
         return JSONResponse(
             content={"message": f"Project name: {project_data['name']} exists."},
             status_code=status.HTTP_400_BAD_REQUEST
@@ -81,6 +82,8 @@ async def create(
     project_model = ProjectCreateSchema(
         name=project_data["name"],
         description=project_data.get("description"),
+        start_date=project_data["start_date"],
+        end_date=project_data["end_date"],
         geo_project_type=json_data.get("type"),
         bbox=json_data.get("bbox"),
     ).model_dump(exclude_unset=True, exclude_none=True)
@@ -90,7 +93,6 @@ async def create(
     project = ProjectResponseSchema(**project).model_dump(exclude_none=True)
     return project
 
-
 @geojson_router.get(
     "/read/{project_id}",
     status_code=status.HTTP_200_OK
@@ -99,7 +101,8 @@ async def read(
     project_id: int,
     db_engine: Annotated[AsyncEngine, Depends(get_db_engine)],
 ):
-    if not await project_by_id_exists(db_engine, project_id):
+    project = await fetch_project_by_id(db_engine, project_id)
+    if project is None:
         return JSONResponse(
             content={"message": f"Project id: {project_id} does not exist."},
             status_code=status.HTTP_404_NOT_FOUND
@@ -132,22 +135,38 @@ async def list(
 async def update(
     project_id: int,
     db_engine: Annotated[AsyncEngine, Depends(get_db_engine)],
-    project: ProjectBaseUpdateSchema = Depends(),
+    project: Annotated[ProjectBaseUpdateSchema, Query()],
     file: Union[UploadFile, str, None] = File(None),
 ):
-    project_data = project.model_dump()
 
-    if not await project_by_id_exists(db_engine, project_id):
+    project_data = project.model_dump(exclude_none=True, exclude_unset=True)
+    project_by_id = await fetch_project_by_id(db_engine, project_id)
+    if project_by_id is None:
         return JSONResponse(
             content={"message": f"Project id: {project_id} does not exist."},
             status_code=status.HTTP_404_NOT_FOUND
         )
-    if project_data.get("name"):
-        if await project_by_name_exists(db_engine, project_data["name"]):
-            return JSONResponse(
-                content={"message": f"Project name: {project_data['name']} exists."},
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
+    name = project_data.get("name", project_by_id[1])
+    start_date = project_data.get("start_date", project_by_id[2])
+    end_date = project_data.get("end_date", project_by_id[3])
+    print(name, start_date, end_date, '*********************************')
+    if start_date > end_date:
+        return JSONResponse(
+            content={"message": "start_date must be before or equal end_date."},
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    if (
+        (name, start_date, end_date) != project_by_id[1:]
+        and await project_by_unique_index_exists(
+            db_engine,
+            {"name": name, 'start_date': start_date, 'end_date': end_date}
+        )
+    ):
+        return JSONResponse(
+            content={"message": f"Project name: {name} exists."},
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
 
     json_data = {}
     geo_data = {}
@@ -185,7 +204,13 @@ async def update(
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
-    if not (project_data.get("name") or project_data.get("description") or geo_data):
+    if not (
+        project_data.get("name")
+        or project_data.get("start_date")
+        or project_data.get("end_date")
+        or project_data.get("description")
+        or geo_data
+    ):
         return JSONResponse(
             content={"message": "Bad request: name or description or file has to be defined."},
             status_code=status.HTTP_400_BAD_REQUEST
@@ -193,6 +218,8 @@ async def update(
 
     project_model = ProjectUpdateSchema(
         name=project_data.get("name"),
+        start_date=project_data.get("start_date"),
+        end_date=project_data.get("end_date"),
         description=project_data.get("description"),
         geo_project_type=json_data.get("type"),
         bbox=json_data.get("bbox"),

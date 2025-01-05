@@ -1,8 +1,8 @@
 from pydantic import ValidationError
 from sqlalchemy import select, update, delete
-from sqlalchemy.dialects.postgresql import insert, dialect
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
-from sqlalchemy.sql import text
+from sqlalchemy.sql import text, and_
 from typing import Optional, Any
 from geojson_pydantic import Feature, FeatureCollection
 import json
@@ -87,6 +87,8 @@ def fetch_projects_stmt(project_id: Optional[int] = None):
             SELECT 
                 p.project_id AS project_id,
                 p.name AS name,
+                p.start_date AS start_date,
+                p.end_date AS end_date,
                 p.description AS description,
                 p.bbox AS bbox,
                 p.geo_project_type AS geo_project_type,
@@ -119,6 +121,8 @@ def fetch_projects_stmt(project_id: Optional[int] = None):
         SELECT
             project_id,
             name,
+            start_date,
+            end_date,
             COALESCE(description, '') AS description,
             created_at,
             updated_at,
@@ -139,24 +143,38 @@ def fetch_projects_stmt(project_id: Optional[int] = None):
     return select_stmt
 
 
-async def project_by_name_exists(
+async def project_by_unique_index_exists(
     db_engine: AsyncEngine,
-    name: str,
+    project_data: dict[str, Any],
 ) -> bool:
     async with db_engine.connect() as conn:
-        query = select(ProjectModel).where(ProjectModel.name == name)
+        query = select(
+            ProjectModel.name,
+            ProjectModel.start_date,
+            ProjectModel.end_date).where(
+            and_(
+                ProjectModel.name == project_data["name"],
+                ProjectModel.start_date == project_data["start_date"],
+                ProjectModel.end_date == project_data["end_date"]
+            )
+        )
         result = await conn.execute(query)
         return bool(result.fetchone())
 
 
-async def project_by_id_exists(
+async def fetch_project_by_id(
     db_engine: AsyncEngine,
     project_id: int,
-) -> bool:
+):
     async with db_engine.connect() as conn:
-        query = select(ProjectModel).where(ProjectModel.project_id == project_id)
+        query = select(
+            ProjectModel.project_id,
+            ProjectModel.name,
+            ProjectModel.start_date,
+            ProjectModel.end_date
+        ).where(ProjectModel.project_id == project_id)
         result = await conn.execute(query)
-        return bool(result.fetchone())
+        return result.fetchone()
 
 
 async def create_project_entry(

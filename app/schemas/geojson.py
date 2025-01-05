@@ -1,12 +1,21 @@
-from datetime import datetime
+from datetime import datetime, date
 from geojson_pydantic import Feature, FeatureCollection
-from pydantic import BaseModel, ConfigDict, EmailStr, field_validator, Json
+from pydantic import BaseModel, model_validator
 from typing import Optional
+from typing_extensions import Self
 
 
 class ProjectBaseCreateSchema(BaseModel):
     name: str
     description: Optional[str] = None
+    start_date: date
+    end_date: date
+
+    @model_validator(mode="after")
+    def validate_model_after(self) -> Self:
+        if self.start_date > self.end_date:
+            raise ValueError("start_date must be before or equal end_date")
+        return self
 
 
 class ProjectCreateSchema(ProjectBaseCreateSchema):
@@ -17,6 +26,13 @@ class ProjectCreateSchema(ProjectBaseCreateSchema):
 class ProjectBaseUpdateSchema(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    @model_validator(mode="after")
+    def validate_model_after(self) -> Self:
+        if self.start_date and self.end_date and self.start_date > self.end_date:
+            raise ValueError("start_date must be before or equal end_date")
+        return self
 
 
 class ProjectUpdateSchema(ProjectBaseUpdateSchema):
@@ -27,6 +43,8 @@ class ProjectUpdateSchema(ProjectBaseUpdateSchema):
 class ProjectResponseSchema(BaseModel):
     project_id: int
     name: str
+    start_date: date
+    end_date: date
     description: Optional[str] = None
     created_at: datetime
     updated_at: datetime

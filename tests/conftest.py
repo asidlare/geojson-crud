@@ -93,6 +93,21 @@ async def engine_override(app, connection_test):
 
 
 @pytest.fixture(scope="function")
+def date_20250101():
+    return '2025-01-01'
+
+
+@pytest.fixture(scope="function")
+def date_20250102():
+    return '2025-01-02'
+
+
+@pytest.fixture(scope="function")
+def date_20250103():
+    return '2025-01-03'
+
+
+@pytest.fixture(scope="function")
 def point_feature_dict():
     return {
         "type": "Feature",

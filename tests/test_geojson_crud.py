@@ -1,5 +1,8 @@
 def test_create_user_happy_path(
     client,
+    date_20250101,
+    date_20250102,
+    date_20250103,
     point_feature_dict,
     point_feature_file,
     polygon_feature_file,
@@ -11,6 +14,8 @@ def test_create_user_happy_path(
         "/geojson/create",
         params={
             "name": "point location",
+            "start_date": date_20250102,
+            "end_date": date_20250102,
             "description": "point location description",
         },
         files={"file": point_feature_file},
@@ -18,6 +23,8 @@ def test_create_user_happy_path(
     response_json = response.json()
     assert response.status_code == 201
     assert response_json["name"] == "point location"
+    assert response_json["start_date"] == date_20250102
+    assert response_json["end_date"] == date_20250102
     assert response_json["description"] == "point location description"
     assert response_json["feature"] == point_feature_dict
     assert response_json.get("featurecollection") is None
@@ -31,6 +38,8 @@ def test_create_user_happy_path(
         f"/geojson/update/{response_json['project_id']}",
         params={
             "name": "polygon location",
+            "start_date": date_20250101,
+            "end_date": date_20250103,
             "description": "polygon location description",
         },
         files={"file": polygon_feature_file},
@@ -38,6 +47,8 @@ def test_create_user_happy_path(
     response_json = response.json()
     assert response.status_code == 200
     assert response_json["name"] == "polygon location"
+    assert response_json["start_date"] == date_20250101
+    assert response_json["end_date"] == date_20250103
     assert response_json["description"] == "polygon location description"
     assert response_json["feature"]["geometry"]["type"] == "Polygon"
     assert response_json.get("featurecollection") is None
@@ -54,6 +65,8 @@ def test_create_user_happy_path(
 
 def test_create_feature_collection(
     client,
+    date_20250101,
+    date_20250103,
     feature_collection_dict,
     feature_collection_file
 ):
@@ -61,12 +74,16 @@ def test_create_feature_collection(
         "/geojson/create",
         params={
             "name": "feature collection",
+            "start_date": date_20250101,
+            "end_date": date_20250103
         },
         files={"file": feature_collection_file},
     )
     response_json = response.json()
     assert response.status_code == 201
     assert response_json["name"] == "feature collection"
+    assert response_json["start_date"] == date_20250101
+    assert response_json["end_date"] == date_20250103
     assert response_json["description"] == ""
     assert response_json["featurecollection"]["type"] == feature_collection_dict["type"]
     assert response_json.get("feature") is None
@@ -78,6 +95,8 @@ def test_create_feature_collection(
 
 def test_create_bad_schema(
     client,
+    date_20250101,
+    date_20250103,
     no_feature_geometry_only_file,
     broken_geometry_file,
     broken_features_file,
@@ -86,6 +105,8 @@ def test_create_bad_schema(
         "/geojson/create",
         params={
             "name": "feature",
+            "start_date": date_20250101,
+            "end_date": date_20250103,
         },
         files={"file": no_feature_geometry_only_file},
     )
@@ -96,6 +117,8 @@ def test_create_bad_schema(
         "/geojson/create",
         params={
             "name": "feature",
+            "start_date": date_20250101,
+            "end_date": date_20250103,
         },
         files={"file": broken_geometry_file},
     )
@@ -106,6 +129,8 @@ def test_create_bad_schema(
         "/geojson/create",
         params={
             "name": "feature collection",
+            "start_date": date_20250101,
+            "end_date": date_20250103,
         },
         files={"file": broken_features_file},
     )
@@ -115,6 +140,8 @@ def test_create_bad_schema(
 
 def test_update_different_geometries(
     client,
+    date_20250101,
+    date_20250103,
     point_feature_file,
     feature_collection_file,
     no_feature_geometry_only_file,
@@ -125,6 +152,8 @@ def test_update_different_geometries(
         "/geojson/create",
         params={
             "name": "point location",
+            "start_date": date_20250101,
+            "end_date": date_20250103,
         },
         files={"file": point_feature_file},
     )
@@ -180,11 +209,19 @@ def test_update_different_geometries(
     assert response.json()["message"] == "Bad request: name or description or file has to be defined."
 
 
-def test_create_empty_file(client, empty_string_file, point_feature_file):
+def test_create_empty_file(
+    client,
+    date_20250101,
+    date_20250103,
+    empty_string_file,
+    point_feature_file
+):
     response = client.post(
         "/geojson/create",
         params={
             "name": "empty",
+            "start_date": date_20250101,
+            "end_date": date_20250103,
             "description": None,
         },
         files={"file": empty_string_file},
@@ -196,6 +233,8 @@ def test_create_empty_file(client, empty_string_file, point_feature_file):
         "/geojson/create",
         params={
             "name": "first point location",
+            "start_date": date_20250101,
+            "end_date": date_20250103,
         },
         files={"file": point_feature_file},
     )
@@ -209,11 +248,18 @@ def test_create_empty_file(client, empty_string_file, point_feature_file):
     assert response.json()["message"] == "Bad file format: empty_string.json."
 
 
-def test_repeated_name(client, point_feature_file):
+def test_repeated_name(
+    client,
+    date_20250101,
+    date_20250103,
+    point_feature_file
+):
     response = client.post(
         "/geojson/create",
         params={
             "name": "first point location",
+            "start_date": date_20250101,
+            "end_date": date_20250103,
         },
         files={"file": point_feature_file},
     )
@@ -223,6 +269,8 @@ def test_repeated_name(client, point_feature_file):
         "/geojson/create",
         params={
             "name": "first point location",
+            "start_date": date_20250101,
+            "end_date": date_20250103,
         },
         files={"file": point_feature_file},
     )
@@ -233,6 +281,8 @@ def test_repeated_name(client, point_feature_file):
         "/geojson/create",
         params={
             "name": "second point location",
+            "start_date": date_20250101,
+            "end_date": date_20250103,
         },
         files={"file": point_feature_file},
     )
@@ -267,7 +317,12 @@ def test_non_existing_project_id(client, point_feature_file):
     assert response.status_code == 204
 
 
-def test_list(client, point_feature_file):
+def test_list(
+    client,
+    date_20250101,
+    date_20250103,
+    point_feature_file
+):
     response = client.get("/geojson/list")
     assert response.status_code == 200
     assert response.json() == []
@@ -276,6 +331,8 @@ def test_list(client, point_feature_file):
         "/geojson/create",
         params={
             "name": "first point location",
+            "start_date": date_20250101,
+            "end_date": date_20250103,
         },
         files={"file": point_feature_file},
     )
@@ -285,6 +342,8 @@ def test_list(client, point_feature_file):
         "/geojson/create",
         params={
             "name": "second point location",
+            "start_date": date_20250101,
+            "end_date": date_20250103,
         },
         files={"file": point_feature_file},
     )
