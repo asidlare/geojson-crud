@@ -5,9 +5,9 @@ Table of Contents
 
 * [GEOJSON CRUD](#geojson-crud)
   * [Description](#description)
-    * [Supported operations:](#supported-operations)
-    * [Basic project attributes:](#basic-project-attributes)
-    * [Technical requirements:](#technical-requirements)
+    * [Supported operations](#supported-operations)
+    * [Basic project attributes](#basic-project-attributes)
+    * [Technical requirements](#technical-requirements)
     * [Database schema](#database-schema)
   * [Application in a container](#application-in-a-container)
     * [Launching the container](#launching-the-container)
@@ -32,7 +32,7 @@ Table of Contents
 “Project” is a plot of land, that we will be analyzing
 by utilizing the satellite imagery captured in selected date range.
 
-### Supported operations:
+### Supported operations
 
 * Create
 * Read
@@ -40,14 +40,14 @@ by utilizing the satellite imagery captured in selected date range.
 * Delete
 * Update
 
-### Basic project attributes:
+### Basic project attributes
 
 * name (required, character limit, up to 32 characters)
 * description (optional)
 * date range: start_date and end_date (required)
 * file - geoJSON file (required)
 
-### Technical requirements:
+### Technical requirements
 
 * FastAPI framework used
 * projects are persisted in postgresql with postgis extension
