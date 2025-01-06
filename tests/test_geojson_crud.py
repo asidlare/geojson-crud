@@ -96,10 +96,12 @@ def test_create_feature_collection(
 def test_create_bad_schema(
     client,
     date_20250101,
+    date_20250102,
     date_20250103,
     no_feature_geometry_only_file,
     broken_geometry_file,
     broken_features_file,
+    point_feature_file,
 ):
     response = client.post(
         "/geojson/create",
@@ -136,6 +138,76 @@ def test_create_bad_schema(
     )
     assert response.status_code == 422
     assert response.json()["message"] == "Bad file format: broken_features.json."
+
+    response = client.post(
+        "/geojson/create",
+        params={
+            "name": "feature collection",
+            "start_date": date_20250103,
+            "end_date": date_20250101,
+        },
+        files={"file": point_feature_file},
+    )
+    assert response.status_code == 422
+
+    response = client.post(
+        "/geojson/create",
+        params={
+            "name": "feature collection",
+            "start_date": date_20250102,
+            "end_date": date_20250102,
+        },
+        files={"file": point_feature_file},
+    )
+    assert response.status_code == 201
+
+    response = client.patch(
+        f"/geojson/update/{response.json()['project_id']}",
+        params={
+            "start_date": date_20250102,
+            "end_date": date_20250101,
+        },
+        files={"file": point_feature_file},
+    )
+    assert response.status_code == 422
+
+
+def test_update_date_range(
+    client,
+    date_20250101,
+    date_20250102,
+    date_20250103,
+    point_feature_file,
+):
+    response = client.post(
+        "/geojson/create",
+        params={
+            "name": "feature collection",
+            "start_date": date_20250102,
+            "end_date": date_20250102,
+        },
+        files={"file": point_feature_file},
+    )
+    assert response.status_code == 201
+    project_id = response.json()["project_id"]
+
+    response = client.patch(
+        f"/geojson/update/{project_id}",
+        params={
+            "start_date": date_20250103,
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["message"] == "start_date must be before or equal end_date."
+
+    response = client.patch(
+        f"/geojson/update/{project_id}",
+        params={
+            "end_date": date_20250101,
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["message"] == "start_date must be before or equal end_date."
 
 
 def test_update_different_geometries(

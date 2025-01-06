@@ -149,7 +149,6 @@ async def update(
     name = project_data.get("name", project_by_id[1])
     start_date = project_data.get("start_date", project_by_id[2])
     end_date = project_data.get("end_date", project_by_id[3])
-    print(name, start_date, end_date, '*********************************')
     if start_date > end_date:
         return JSONResponse(
             content={"message": "start_date must be before or equal end_date."},
