@@ -49,3 +49,4 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_features_project_id'), table_name='features')
     op.drop_table('features')
     op.drop_table('projects')
+    op.execute('DROP TYPE geo_project_type')
