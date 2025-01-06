@@ -1,7 +1,5 @@
 Test repo with crud for geoJSON file format.
 
-# GEOJSON CRUD
-
 Table of Contents
 =================
 
@@ -26,6 +24,8 @@ Table of Contents
     * [Update example](#update-example)
     * [Delete example](#delete-example)
   * [Bibliography](#bibliography)
+
+# GEOJSON CRUD
 
 ## Description
 
