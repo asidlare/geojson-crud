@@ -29,8 +29,7 @@ Table of Contents
 
 ## Description
 
-“Project” is a plot of land, that we will be analyzing
-by utilizing the satellite imagery captured in selected date range.
+“Project” is a plot of land, that will be analyzed by utilizing the satellite imagery captured in selected date range.
 
 ### Supported operations
 
@@ -144,7 +143,7 @@ root@04843519acac:/code# pytest --cov-report html:coverage_html --cov=app tests/
 
 ## Swagger
 
-Swagger can be launched in a browser after [launching the container](#launching-the-container)
+Swagger has to be launched in a browser after [launching the container](#launching-the-container)
 
 Swagger url: [http://localhost:8001/docs#/](http://localhost:8001/docs#/)
 
