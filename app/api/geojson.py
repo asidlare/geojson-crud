@@ -66,25 +66,57 @@ def get_features_sql_and_data(
     return {'feature_sql': feature_sql, 'geo_data_values': geo_data_values}
 
 
-
-def fetch_projects_stmt(project_id: Optional[int] = None):
+def fetch_projects_stmt(
+    project_id: Optional[int] = None,
+    page_start: Optional[int] = None,
+    page_end: Optional[int] = None,
+):
     select_stmt = '''
         WITH cte_feat AS (
+    '''
+    if page_start and page_end:
+        '''
+        DENSE_RANK is used to rank projects for pagination.
+
+        project_id cannot be used for filtering for pagination
+        because there can be gaps in data because projects can be deleted.
+
+        Filtering projects in the first CTE allows to limit rows aggregation
+        what will result in faster query.
+        '''
+        select_stmt += '''
+            SELECT * FROM
+            ( SELECT
+                DENSE_RANK() OVER (ORDER BY project_id) as project_rank,
+        '''
+    else:
+        select_stmt += '''
             SELECT
+        '''
+    select_stmt += '''
                 'Feature' AS type,
                 properties::json AS properties,
                 ST_AsGeoJSON(geometry)::json AS geometry,
                 project_id AS project_id
-            FROM features
     '''
     if project_id:
         select_stmt += '''
+            FROM features
             WHERE project_id = :project_id
+        '''
+    elif page_start and page_end:
+        select_stmt += '''
+            FROM features) AS temp_features
+            WHERE project_rank BETWEEN :page_start AND :page_end
+        '''
+    else:
+        select_stmt += '''
+            FROM features
         '''
     select_stmt += '''
         ),
         cte_feat_json AS (
-            SELECT 
+            SELECT
                 p.project_id AS project_id,
                 p.name AS name,
                 p.start_date AS start_date,
@@ -123,7 +155,7 @@ def fetch_projects_stmt(project_id: Optional[int] = None):
             name,
             start_date,
             end_date,
-            COALESCE(description, '') AS description,
+            description,
             created_at,
             updated_at,
             CASE WHEN geo_project_type = 'Feature' THEN
@@ -141,6 +173,15 @@ def fetch_projects_stmt(project_id: Optional[int] = None):
         FROM cte_feat_json
     '''
     return select_stmt
+
+
+async def get_total_and_pages(db_engine: AsyncEngine, size: int) -> tuple[int, int]:
+    async with db_engine.connect() as conn:
+        select_stmt = '''SELECT COUNT(DISTINCT project_id) FROM features'''
+        result = await conn.execute(text(select_stmt))
+        total = result.fetchone()[0]
+        pages = total // size if total % size == 0 else total // size + 1
+        return total, pages
 
 
 async def project_by_unique_index_exists(
@@ -231,7 +272,7 @@ async def read_project_entry(
     project_id: int
 ):
     async with db_engine.connect() as conn:
-        select_stmt = fetch_projects_stmt(project_id)
+        select_stmt = fetch_projects_stmt(project_id=project_id)
         result = await conn.execute(text(select_stmt), {'project_id': project_id})
         return result.fetchone()._asdict()
 
@@ -242,6 +283,20 @@ async def read_project_entries(
     async with db_engine.connect() as conn:
         select_stmt = fetch_projects_stmt()
         result = await conn.execute(text(select_stmt))
+        return result.fetchall()
+
+
+async def read_project_entries_with_pagination(
+    db_engine: AsyncEngine,
+    page_start: int,
+    page_end: int
+):
+    async with db_engine.connect() as conn:
+        select_stmt = fetch_projects_stmt(page_start=page_start, page_end=page_end)
+        result = await conn.execute(
+            text(select_stmt),
+            {"page_start": page_start, "page_end": page_end}
+        )
         return result.fetchall()
 
 

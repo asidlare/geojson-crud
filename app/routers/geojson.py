@@ -2,7 +2,6 @@ import json
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from fastapi.responses import JSONResponse
-from geojson_pydantic import Feature, FeatureCollection
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine
 from pydantic import ValidationError
 from typing import Annotated, Union
@@ -11,8 +10,10 @@ from app.api.geojson import (
     fetch_project_by_id,
     get_geo_data_from_feature,
     get_geo_data_from_feature_collection,
+    get_total_and_pages,
     project_by_unique_index_exists,
     read_project_entries,
+    read_project_entries_with_pagination,
     read_project_entry,
     update_project_entry,
     delete_project_entry
@@ -25,6 +26,7 @@ from app.schemas.geojson import (
     ProjectUpdateSchema,
     ProjectResponseSchema
 )
+from app.schemas.pagination import PageParams, PagedResponseSchema
 
 
 geojson_router = APIRouter()
@@ -90,7 +92,7 @@ async def create(
     project_id = await create_project_entry(db_engine, project_model, geo_data)
 
     project = await read_project_entry(db_engine, project_id)
-    project = ProjectResponseSchema(**project).model_dump(exclude_none=True)
+    project = ProjectResponseSchema(**project).model_dump()
     return project
 
 @geojson_router.get(
@@ -109,7 +111,7 @@ async def read(
         )
 
     project = await read_project_entry(db_engine, project_id)
-    project = ProjectResponseSchema(**project).model_dump(exclude_none=True)
+    project = ProjectResponseSchema(**project).model_dump()
     return project
 
 
@@ -122,10 +124,44 @@ async def list(
 ):
     projects = await read_project_entries(db_engine)
     response_projects = [
-        ProjectResponseSchema(**project._asdict()).model_dump(exclude_none=True)
+        ProjectResponseSchema(**project._asdict()).model_dump()
         for project in projects
     ]
     return response_projects
+
+
+@geojson_router.get(
+    "/list-with-pagination",
+    status_code=status.HTTP_200_OK
+)
+async def list_with_pagination(
+    db_engine: Annotated[AsyncEngine, Depends(get_db_engine)],
+    page_params: Annotated[PageParams, Query()],
+):
+    page_params = page_params.model_dump()
+    total, pages = await get_total_and_pages(db_engine, page_params["size"])
+    if page_params["page"] > pages:
+        response_data = {
+            "total": total,
+            "pages": pages,
+            "page": page_params["page"],
+            "size": page_params["size"],
+            "projects": []
+        }
+    else:
+        projects = await read_project_entries_with_pagination(
+            db_engine=db_engine,
+            page_start=page_params["page_start"],
+            page_end=page_params["page_end"]
+        )
+        response_data = PagedResponseSchema(
+            total=total,
+            pages=pages,
+            page=page_params["page"],
+            size=page_params["size"],
+            projects=[project._asdict() for project in projects]
+        ).model_dump()
+    return response_data
 
 
 @geojson_router.patch(
@@ -226,7 +262,7 @@ async def update(
     await update_project_entry(db_engine, project_id, project_model, geo_data)
 
     project = await read_project_entry(db_engine, project_id)
-    project = ProjectResponseSchema(**project).model_dump(exclude_none=True)
+    project = ProjectResponseSchema(**project).model_dump()
     return project
 
 

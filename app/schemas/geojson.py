@@ -28,6 +28,7 @@ class ProjectBaseUpdateSchema(BaseModel):
     description: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+
     @model_validator(mode="after")
     def validate_model_after(self) -> Self:
         if self.start_date and self.end_date and self.start_date > self.end_date:
@@ -50,3 +51,10 @@ class ProjectResponseSchema(BaseModel):
     updated_at: datetime
     feature: Optional[Feature] = None
     featurecollection: Optional[FeatureCollection] = None
+
+    @model_validator(mode="after")
+    def validate_model_after(self) -> Self:
+        for field in ["feature", "featurecollection"]:
+            if getattr(self, field) is None:
+                delattr(self, field)
+        return self

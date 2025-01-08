@@ -21,6 +21,7 @@ Table of Contents
     * [Create examples](#create-examples)
     * [Read example](#read-example)
     * [List example](#list-example)
+    * [List with pagination example](#list-with-pagination-example)
     * [Update example](#update-example)
     * [Delete example](#delete-example)
   * [Bibliography](#bibliography)
@@ -163,6 +164,10 @@ Swagger url: [http://localhost:8001/docs#/](http://localhost:8001/docs#/)
 ### List example
 
 ![List](screenshots/list.png)
+
+### List with pagination example
+
+![List with pagination](screenshots/list_with_pagination.png)
 
 ### Update example
 

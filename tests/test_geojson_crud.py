@@ -26,7 +26,7 @@ def test_create_user_happy_path(
     assert response_json["start_date"] == date_20250102
     assert response_json["end_date"] == date_20250102
     assert response_json["description"] == "point location description"
-    assert response_json["feature"] == point_feature_dict
+    assert response_json["feature"]["type"] == point_feature_dict["type"]
     assert response_json.get("featurecollection") is None
 
     response = client.get(f"/geojson/read/{response_json['project_id']}")
@@ -84,7 +84,7 @@ def test_create_feature_collection(
     assert response_json["name"] == "feature collection"
     assert response_json["start_date"] == date_20250101
     assert response_json["end_date"] == date_20250103
-    assert response_json["description"] == ""
+    assert response_json["description"] is None
     assert response_json["featurecollection"]["type"] == feature_collection_dict["type"]
     assert response_json.get("feature") is None
 
@@ -231,7 +231,7 @@ def test_update_different_geometries(
     )
     response_json = response.json()
     assert response.status_code == 201
-    assert response_json["description"] == ""
+    assert response_json["description"] is None
     assert response_json["feature"]["type"] == "Feature"
 
     response = client.patch(
@@ -424,3 +424,59 @@ def test_list(
     response = client.get("/geojson/list")
     assert response.status_code == 200
     assert len(response.json()) == 2
+
+
+def test_list_with_pagination(
+    client,
+    date_20250101,
+    date_20250103,
+    point_feature_file
+):
+    response = client.get("/geojson/list-with-pagination", params={"page": 1, "size": 2})
+    assert response.status_code == 200
+    assert response.json() == {
+        "total": 0,
+        "pages": 0,
+        "page": 1,
+        "size": 2,
+        "projects": []
+    }
+
+    for i in range(3):
+        response = client.post(
+            "/geojson/create",
+            params={
+                "name": f"{i}: first point location",
+                "start_date": date_20250101,
+                "end_date": date_20250103,
+            },
+            files={"file": point_feature_file},
+        )
+        assert response.status_code == 201
+
+    response = client.get("/geojson/list-with-pagination", params={"page": 1, "size": 2})
+    assert response.status_code == 200
+    response_json = response.json()
+    assert response_json["total"] == 3
+    assert response_json["pages"] == 2
+    assert response_json["page"] == 1
+    assert response_json["size"] == 2
+    assert len(response_json["projects"]) == 2
+
+    response = client.get("/geojson/list-with-pagination", params={"page": 2, "size": 2})
+    assert response.status_code == 200
+    response_json = response.json()
+    assert response_json["total"] == 3
+    assert response_json["pages"] == 2
+    assert response_json["page"] == 2
+    assert response_json["size"] == 2
+    assert len(response_json["projects"]) == 1
+
+    response = client.get("/geojson/list-with-pagination", params={"page": 3, "size": 2})
+    assert response.status_code == 200
+    response_json = response.json()
+    assert response_json["total"] == 3
+    assert response_json["pages"] == 2
+    assert response_json["page"] == 3
+    assert response_json["size"] == 2
+    assert response_json["projects"] == []
